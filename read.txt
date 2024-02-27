@@ -1,2 +1,2 @@
 1. 사용할 3D모델을 라이노 그리들을 통해서 생성한다.
-2. 만들 모델을 생성한후 Gvole을 
+2. 만들 모델을 생성한후 Gvole 를 입력한후 Mode= ConHexDom , Outputformat=ABAQUS로 설정한다
