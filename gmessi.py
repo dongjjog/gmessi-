@@ -1,62 +1,64 @@
-def process_element_data(element_number, nodes, elset, elset_material_map):
- 
-    material_number = elset_material_map.get(elset, 0)  # Default to 0 if not found
-    return f'add element # {element_number} type 8NodeBrick using 2 Gauss points each direction with nodes({", ".join(nodes)}) use material # {material_number};\n'
+import re
+import os
 
-# Initialize a dictionary to map ELSET to material numbers
-elset_material_map = {}
-current_material_number = 0
-
-lines = []  # Initialize lines list
-
-# Ensure to read your file content here
-with open("r.txt", "r") as f:
+#모델파일 불러오기
+with open("ex4.txt", "r") as f:
     lines = f.readlines()
 
-# element 번호 및 그룹번호 지정
-for line in lines:
-    if '*ELEMENT,TYPE=' in line and 'ELSET=' in line:
-        elset = line.split('ELSET=')[1].strip()
-        if elset not in elset_material_map:
-            current_material_number += 1  # element 번호
-            elset_material_map[elset] = current_material_number
+# 
+start = None
+end = None
 
-# Initialize parsing flag
-parsing = False
+#node 
+for i, line in enumerate(lines):
+    if 'NBLOCK' in line:
+        start = i + 2  
+    elif start is not None and line.strip() == '':
+        end = i
+        break
 
-# Extracting node information
+
 with open('node.fei', 'w') as f:
-    for line in lines:
-        if '*NODE' in line: #node파트 읽기
-            parsing = True
-        elif '*ELEMENT' in line: #element파트 읽기 취소
-            parsing = False
-        if parsing:
-            data = line.replace(',', ' ').split() #빈칸과 ','부분을 넘기기
-            if len(data) == 4:  # Ensure exactly four parts for a node line
-                no, x, y, z = data
-                f.write(f'add node # {no} at ({x}*m, {y}*m, {z}*m) with 3 dofs;\n')
+    for line in lines[start:end]:
+        data = line.split()
+        if len(data) >= 6:  # 데이터 항목의 수 확인
+            no = data[0]
+            x = data[3]
+            y = data[4]
+            z = data[5]
+            f.write(f'add node # {no} at ({x}*m, {y}*m, {z}*m) with 3 dofs;\n')
+        else:
+            print(f"Skipping line due to insufficient data: {line}")
 
-# Reset parsing flag and ELSET for each element section
-parsing = False
-elset = None
+#element
+for i, line in enumerate(lines):
+    if 'EBLOCK' in line:
+        start = i + 2  
+    elif start is not None and line.strip() == '':
+        end = i
+        break
 
-# Extracting and processing element information
 with open('element.fei', 'w') as f:
-    for line in lines:
-        if '*ELEMENT,TYPE=' in line:
-            data = line.split(',')
-            elset = data[-1].split('=')[1].strip()  # ELSET=G10001 를 인식한다
-            parsing = True
-        elif elset and ',' in line and parsing:  # 
-            data = line.strip().split(',')
-            element_number = data[0] #element번호 
-            nodes = data[1:] #node번호
-            output_line = process_element_data(element_number, nodes, elset, elset_material_map)
-            if output_line:  # Write output if it's not an empty string
-                f.write(output_line)
+    for line in lines[start:end]:
+        data = line.split()
+        if len(data) >= 19:
+            g1 = data[0]
+            e1 = data[10]
+            p1 = data[11]  
+            p2 = data[12]  
+            p3 = data[13] 
+            p4 = data[14] 
+            p5 = data[15]
+            p6 = data[16]
+            p7 = data[17]
+            p8 = data[18]
 
-# Path to the input file containing node information
+            
+            f.write(f'add element #    {e1}  type 8NodeBrick using 2 Gauss points each direction with nodes( {p1}, {p2}, {p3}, {p4}, {p5}, {p6}, {p7}, {p8} ) use material #   {g1};\n')    
+        else:
+            print(f"Skipping line due to insufficient data: {line}")       
+
+
 input_file_path = 'node.fei'
 # Path to the output file to save the results
 output_file_path = 'fix.fei'
@@ -77,18 +79,22 @@ for line in lines:
         # Extract the node number directly without '#' character
         node_number = parts[3]  # Changed from parts[2] to correctly extract the node number without '#'
         coords = parts[5:10]  # Adjusted the indices to correctly extract coordinates
-        node_number2 = parts[3]  # Changed from parts[2] to correctly extract the node number without '#'
-        coords2 = parts[5:9] 
-        #fix시킬 범위선택 0
-        if any('0.00000000000000e+00' in coord for coord in coords):
+        xnodemax = parts[3]  # Changed from parts[2] to correctly extract the node number without '#'
+        xcoords = parts[5:6] 
+        ynodemax = parts[3]  # Changed from parts[2] to correctly extract the node number without '#'
+        ycoords = parts[6:7] 
+        #fix시킬 범위선택 x or y or z 좌요가 0일때
+        if any('0.0000000000000e+00' in coord for coord in coords):
             # Adjusted to remove '#' in the output format
             result_lines.append(f"fix node No {node_number} dofs uz ;")
-        #fix시킬 범위 10    
-        if any('1.00000000000000e+00' in coord for coord in coords2):
+        #fix시킬 범위선택 x좌표max값   
+        if any('1.0000000000000e+01' in coord for coord in xcoords):
             # Adjusted to remove '#' in the output format
-            result_lines.append(f"fix node No {node_number2} dofs uz ;")        
+            result_lines.append(f"fix node No {xnodemax} dofs uz ;")  
+        #fix시킬 범위선택 y좌표max값           
+        if any('1.0000000000000e+01' in coord for coord in ycoords):
+            # Adjusted to remove '#' in the output format
+            result_lines.append(f"fix node No {ynodemax} dofs uz ;") 
 # Save the resulting strings to the output file
 with open(output_file_path, 'w') as output_file:
-    output_file.write('\n'.join(result_lines))
-
-
+    output_file.write('\n'.join(result_lines)) 
